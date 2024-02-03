@@ -51,68 +51,116 @@ def process_condition(condition_string):
         raise Exception(f"Wrong number of variables: {variables}")
 
 
+def index_query(query, base_index):
+    if isinstance(query, list):
+        return [index_query(e, f'{base_index}_{i}') for i, e in enumerate(query)]
+
+    elif isinstance(query, dict) and any(key in query for key in ['not', 'and', 'or']):
+        operator = list(query.keys())[0]  # Получаем оператор ('not', 'and', 'or')
+        return (f'{base_index}_{operator}', {
+            operator: [
+                index_query(arg, f'{base_index}_{operator}_{i}') 
+                for i, arg in enumerate(query[operator])
+            ]
+        })
+
+    else:
+        return (base_index, query)
+
+
 class Parser:
     def __init__(self):
         self.grammar = Lark('''
-            start: node ("=>" node)*
-            node: alias? (parent "->")? event_name conditions
-            alias: NAME ":"
-            parent: NAME
-            event_name: NAME
-            conditions: ("[" CONDITION "]")*
-            CONDITION: /[^\]]+/
+start: node ("=>" node)*
+node: simple_node | not_node | nary_node
+not_node: "not" "{" start "}"
+nary_node: NARY_OPERATOR ("{" start "}")+
+simple_node: alias? (parent "->")? event_name conditions
+alias: NAME ":"
+parent: NAME
+event_name: NAME
+conditions: ("[" CONDITION "]")*
 
-            %import common.CNAME -> NAME
-            %import common.NEWLINE
-            %import common.WS
+CONDITION: /[^\]]+/
+NARY_OPERATOR: "and" | "or"
 
-            %ignore WS
-            %ignore NEWLINE
+%import common.CNAME -> NAME
+%import common.NEWLINE
+%import common.WS
+
+%ignore WS
+%ignore NEWLINE
         ''')
 
-    def parse(self, query):
-        tokens = self.grammar.parse(query)
+    def _create_simple_node(self, node, node_index):
+        aliases = self.aliases
 
+        node_dict = {
+            'node_conditions': [],
+            'order_conditions': []
+        }
+        
+        node_alias = find_node_data(node, 'alias')
+        if node_alias:
+            aliases[node_alias] = node_index
+        
+        node_type = find_node_data(node, 'event_name')
+        if node_type:
+            node_dict['node_conditions'].append(f'type == "{node_type}"')
+            
+        node_parent = find_node_data(node, 'parent')
+        if node_parent:
+            parent_index = aliases[node_parent]
+            node_dict['order_conditions'].append({
+                'node_used': parent_index,
+                'condition': 'A_start_id == B_end_id'
+            })
+            
+        node_conditions = find_node_data(node, 'conditions', multiple=True)
+        if node_conditions:
+            for condition in node_conditions:
+                pandas_condition, condition_nodes = process_condition(condition)
+                if len(condition_nodes) == 0:
+                    node_dict['node_conditions'].append(pandas_condition)
+                if len(condition_nodes) == 1:
+                    condition_node_index = aliases[condition_nodes[0]]
+                    node_dict['order_conditions'].append({
+                        'node_used': condition_node_index,
+                        'condition': pandas_condition
+                    })
+
+        return node_dict
+
+    def _parse(self, tokens):
+        aliases = self.aliases
+
+        print(tokens)
+        print('--------------')
         query = []
-        aliases = {}
 
         for node_index, node in enumerate(tokens.children):
-            node_dict = {
-                'node_conditions': [],
-                'order_conditions': []
-            }
-            
-            node_alias = find_node_data(node, 'alias')
-            if node_alias:
-                aliases[node_alias] = node_index
-            
-            node_type = find_node_data(node, 'event_name')
-            if node_type:
-                node_dict['node_conditions'].append(f'type == "{node_type}"')
-                
-            node_parent = find_node_data(node, 'parent')
-            if node_parent:
-                parent_index = aliases[node_parent]
-                node_dict['order_conditions'].append({
-                    'node_used': parent_index,
-                    'condition': 'A_start_id == B_end_id'
+            node_query_type = node.children[0].data
+    
+            if node_query_type == 'not_node':
+                subquery_tokens = node.children[0].children[0]
+                subquery = self._parse(subquery_tokens)
+                query.append({
+                    'not': subquery
                 })
-                
-            node_conditions = find_node_data(node, 'conditions', multiple=True)
-            if node_conditions:
-                for condition in node_conditions:
-                    pandas_condition, condition_nodes = process_condition(condition)
-                    if len(condition_nodes) == 0:
-                        node_dict['node_conditions'].append(pandas_condition)
-                    if len(condition_nodes) == 1:
-                        condition_node_index = aliases[condition_nodes[0]]
-                        node_dict['order_conditions'].append({
-                            'node_used': condition_node_index,
-                            'condition': pandas_condition
-                        })
-            query.append((
-                str(node_index),
-                node_dict
-            ))
+
+            if node_query_type == 'nary_node':
+                raise Exception("Node is not supported")
+
+            elif node_query_type == 'simple_node':
+                node_dict = self._create_simple_node(node, node_index)
+                query.append(node_dict)
 
         return query
+
+    def parse(self, query):
+        self.aliases = {}
+        tokens = self.grammar.parse(query)
+        query = self._parse(tokens)
+        indexed_query = index_query(query, 'e')
+
+        return indexed_query
