@@ -149,7 +149,16 @@ NARY_OPERATOR: "and" | "or"
                 })
 
             if node_query_type == 'nary_node':
-                raise Exception("Node is not supported")
+                subqueries = []
+                nary_operator = str(node.children[0].children[0])
+
+                for subquery_tokens in node.children[0].children[1:]:
+                    subquery = self._parse(subquery_tokens)
+                    subqueries.append(subquery)
+
+                query.append({
+                    nary_operator: subqueries
+                })
 
             elif node_query_type == 'simple_node':
                 node_dict = self._create_simple_node(node, node_index)
