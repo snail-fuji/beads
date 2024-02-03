@@ -36,8 +36,8 @@ class SimpleExecutor():
         events_A_df = self.query_events_df.loc[events_A_index].reset_index(drop=True)
         events_B_df = self.query_events_df.loc[events_B_index].reset_index(drop=True)
 
-        events_A_df.columns = [f'{c}_A' for c in events_A_df.columns]
-        events_B_df.columns = [f'{c}_B' for c in events_B_df.columns]
+        events_A_df.columns = [f'A_{c}' for c in events_A_df.columns]
+        events_B_df.columns = [f'B_{c}' for c in events_B_df.columns]
         event_pairs_df = pd.concat([events_A_df, events_B_df], axis=1)
         event_pairs_df.index = sequences_df.index
         
@@ -46,22 +46,29 @@ class SimpleExecutor():
     def _select_pairs_df(self, event_pairs_df, condition):
         return event_pairs_df.query(condition)
 
-    def _initialize_sequences(self):
+    def _initialize_sequences(self, query):
+        self.query = [q for _, q in query]
+        self.query_keys = [i for i, _ in query]
         self.sequences_df = self._get_events_by_condition(
             self.query[0]['node_conditions']
         ).reset_index(drop=True).rename(columns={
             'event_order_id': 'event_0'
         })
 
+    def _get_events_mapping(self):
+        return {
+            f'event_{index}': f'event_{key}'
+            for index, key in enumerate(self.query_keys)
+        }
 
     def execute(self, query):
         """
             Returns: user_id, event_0, event_1, ...
         """
-        self.query = query
-        self._initialize_sequences()
+        
+        self._initialize_sequences(query)
 
-        for index, query_node in enumerate(query[1:]):
+        for index, query_node in enumerate(self.query[1:]):
             print(f"Step {index + 1} initiated")
 
             new_nodes_df = self._get_events_by_condition(query_node['node_conditions']).rename(columns={
@@ -80,4 +87,5 @@ class SimpleExecutor():
             print(f"Step {index + 1} finished")
 
 
-        return self.sequences_df
+        events_mapping = self._get_events_mapping()
+        return self.sequences_df.rename(columns=events_mapping)
