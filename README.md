@@ -12,12 +12,8 @@ Find session segments with connection error during intro cutscene, and the end o
 session_start
 => A: IntroStarted
 => and {
-  not {
-    IntroCompleted
-  }
-} {
-  ConnectionError
-}
+  not {IntroCompleted}
+} {ConnectionError}
 => IntroCompleted[this.time - A.time > 60]
 ```
 
