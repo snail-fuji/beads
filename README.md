@@ -7,7 +7,7 @@ Query language for event chains.
 
 # Example
 
-Find session segments with connection error during intro cutscene, and the end of cutscene was delayed,presumably because of an error.
+Find session segments with connection error during intro cutscene, and the end of cutscene was delayed, presumably because of this error.
 ```
 session_start
 => A: IntroStarted
