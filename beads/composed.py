@@ -1,36 +1,52 @@
 import pandas as pd
 from beads.simple import SimpleExecutor, get_events_index
+import copy
+import json
 
 
 def find_intersection(df1, df2):
     return [c for c in df1.columns if c in df2.columns]
 
+def insert_between(query, subquery, index_before):
+    for i, (index, element) in enumerate(query):
+        if (not index_before) or (index == index_before):
+            return query[:(i + 1)] + subquery + query[(i + 1):]
+
+    raise Exception(f"Index {index_before} not found")
 
 def compose_query_logic(query):
     base_query = []
     translated_queries = []
-    
+
+    for index, element in query:
+        if isinstance(element, dict):  
+            key = next(iter(element)) 
+            if key not in ('not', 'and', 'or'):
+                base_query.append((index, element))
+
+        if not isinstance(element, dict):  # If the element is a dictionary
+            raise Exception("What the fuck?")
+            # base_query += [(index, element)]
+
+    prev_index = None
     for index, element in query:
         if isinstance(element, dict):  # If the element is a dictionary
             key = next(iter(element))  # Get the 'not', 'and', or 'or' key
             if key == 'not':  # Unary operator
                 translated_queries.append({
                     'type': 'not',
-                    'query': base_query + element[key]
+                    'query': insert_between(base_query, element[key], prev_index)
                 })
             elif key in ('and', 'or'):  # 'and' or 'or' n-ary operators
                 translated_queries.append({
                     'type': key,
                     'queries': [
-                        base_query + sub_element
+                        insert_between(base_query, sub_element, prev_index)
                         for sub_element in element[key]
                     ]
                 })
                     
-            else:
-                base_query.append((index, element))
-        else:  # If the element is not a dictionary, it's a base query component
-            base_query += [(index, element)]
+        prev_index = index
     
     # Add the base query at the beginning of the result list
     translated_queries.insert(0, {'type': 'base', 'query': base_query})
@@ -94,10 +110,11 @@ class ComposedExecutor():
     def _execute_query(self, query):
         simple_executor = self.simple_executor
         if is_simple_query(query):
+            print(json.dumps(query, indent=4))
             return simple_executor.execute(query)
         
         queries = compose_query_logic(query)
-        print(queries)
+        print(json.dumps(queries, indent=4))
         return self._merge_queries(queries)
 
     def execute(self, query):

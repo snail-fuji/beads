@@ -61,12 +61,20 @@ class SimpleExecutor():
             for index, key in enumerate(self.query_keys)
         }
 
+    def _initialize_aliases(self):
+        self.aliases = {}
+        for index, query_node in enumerate(self.query):
+            if "alias" in query_node:
+                query_node_alias = query_node['alias']
+                self.aliases[query_node_alias] = index
+
     def execute(self, query):
         """
             Returns: user_id, event_0, event_1, ...
         """
-        
+
         self._initialize_sequences(query)
+        self._initialize_aliases()
 
         for index, query_node in enumerate(self.query[1:]):
             print(f"Step {index + 1} initiated")
@@ -77,7 +85,8 @@ class SimpleExecutor():
             self.sequences_df = self._merge_new_nodes(new_nodes_df, index + 1) 
 
             for order_condition in query_node.get('order_conditions', []):
-                target_node = order_condition['node_used']
+                target_node_alias = order_condition['node_used']
+                target_node = self.aliases[target_node_alias]
                 event_pairs_df = self._get_pairs_df(index + 1, target_node)
                 event_pairs_df = self._select_pairs_df(event_pairs_df, order_condition['condition'])
                 self.sequences_df = self.sequences_df.loc[event_pairs_df.index].copy()

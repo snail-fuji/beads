@@ -102,6 +102,7 @@ NARY_OPERATOR: "and" | "or"
         
         node_alias = find_node_data(node, 'alias')
         if node_alias:
+            node_dict['alias'] = node_alias
             aliases[node_alias] = node_index
         
         node_type = find_node_data(node, 'event_name')
@@ -110,9 +111,9 @@ NARY_OPERATOR: "and" | "or"
             
         node_parent = find_node_data(node, 'parent')
         if node_parent:
-            parent_index = aliases[node_parent]
+            # parent_index = aliases[node_parent]
             node_dict['order_conditions'].append({
-                'node_used': parent_index,
+                'node_used': node_parent,
                 'condition': 'A_start_id == B_end_id'
             })
             
@@ -123,9 +124,10 @@ NARY_OPERATOR: "and" | "or"
                 if len(condition_nodes) == 0:
                     node_dict['node_conditions'].append(pandas_condition)
                 if len(condition_nodes) == 1:
-                    condition_node_index = aliases[condition_nodes[0]]
+                    condition_node_alias = condition_nodes[0]
+                    # condition_node_index = aliases[condition_node_alias]
                     node_dict['order_conditions'].append({
-                        'node_used': condition_node_index,
+                        'node_used': condition_node_alias,
                         'condition': pandas_condition
                     })
 
