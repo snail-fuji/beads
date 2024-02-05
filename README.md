@@ -3,7 +3,8 @@
 Query language for event chains. 
 - Allows you to create conditions based on other events declared in the query
 - Finds all occurrences, and not only the first one
-- Was tested on 100k events only. Not very scalable yet.
+- Was tested on 100k events only. Not very scalable yet
+- You don't need to deploy any additional database or broker - just use it with your Pandas code
 
 # Example
 
